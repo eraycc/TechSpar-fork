@@ -330,19 +330,3 @@ http://localhost:5173/copilot
 ## License
 
 CC BY-NC 4.0
-
----
-
-<div align="center">
-
-**If you find this project useful, please give it a star.**
-
-[![Star History Chart](https://api.star-history.com/svg?repos=AnnaSuSu/TechSpar&type=Date)](https://star-history.com/#AnnaSuSu/TechSpar&Date)
-
-</div>
-
----
-
-## 致谢
-
-感谢 [LINUX DO](https://linux.do/) 社区的支持。
