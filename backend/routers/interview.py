@@ -375,6 +375,7 @@ async def _run_resume_review(session_id: str, user_id: str):
             messages=messages,
             user_id=user_id,
             scores=scores,
+            session_id=session_id,
         )
 
         resume_overall = {}
