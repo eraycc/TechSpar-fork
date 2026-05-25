@@ -21,6 +21,7 @@ class InterviewPhase(str, Enum):
     SELF_INTRO = "self_intro"
     TECHNICAL = "technical"
     PROJECT_DEEP_DIVE = "project_deep_dive"
+    BEHAVIORAL = "behavioral"
     REVERSE_QA = "reverse_qa"
     END = "end"
 

@@ -356,6 +356,7 @@ async def _run_resume_review(session_id: str, user_id: str):
         scores = values.get("scores", [])
         weak_points = values.get("weak_points", [])
         eval_history = values.get("eval_history", [])
+        resume_context = values.get("resume_context", "")
         topic_name = values.get("topic_name", entry.get("topic"))
         mode = entry["mode"]
         topic = entry.get("topic")
@@ -368,6 +369,7 @@ async def _run_resume_review(session_id: str, user_id: str):
             weak_points=weak_points,
             topic=topic_name,
             eval_history=eval_history,
+            resume_context=resume_context,
         )
 
         extraction = await update_profile_after_interview(
