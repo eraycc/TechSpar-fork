@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 
 from backend.auth import get_current_user
 from backend.config import settings
-from backend.models import LLMSettings, SettingsResponse
+from backend.models import EmbeddingSettings, LLMSettings, SettingsResponse
 from backend.storage.user_settings import load_user_settings, save_user_settings
 
 router = APIRouter(prefix="/api")
@@ -19,14 +19,22 @@ def get_user_settings(user_id: str = Depends(get_current_user)):
         model=settings.model,
         temperature=settings.temperature,
     )
+    embedding = EmbeddingSettings(
+        backend=settings.embedding_backend,
+        api_base=settings.embedding_api_base,
+        api_key=settings.embedding_api_key,
+        api_model=settings.embedding_api_model,
+        local_model=settings.local_embedding_model,
+        local_path=settings.local_embedding_path,
+    )
     training = load_user_settings(user_id)
-    return SettingsResponse(llm=llm, training=training)
+    return SettingsResponse(llm=llm, embedding=embedding, training=training)
 
 
 @router.put("/settings")
 def put_user_settings(payload: SettingsResponse, user_id: str = Depends(get_current_user)):
-    """Update LLM (global, hot-reload) and training (per-user) settings."""
-    from backend.llm_provider import _reset_llama_singleton
+    """Update LLM/Embedding (global, hot-reload) and training (per-user) settings."""
+    from backend.llm_provider import _reset_embedding_singleton, _reset_llama_singleton
 
     llm = payload.llm
     settings.api_base = llm.api_base
@@ -34,6 +42,15 @@ def put_user_settings(payload: SettingsResponse, user_id: str = Depends(get_curr
     settings.model = llm.model
     settings.temperature = llm.temperature
     _reset_llama_singleton()
+
+    emb = payload.embedding
+    settings.embedding_backend = emb.backend
+    settings.embedding_api_base = emb.api_base
+    settings.embedding_api_key = emb.api_key
+    settings.embedding_api_model = emb.api_model
+    settings.local_embedding_model = emb.local_model
+    settings.local_embedding_path = emb.local_path
+    _reset_embedding_singleton()
 
     save_user_settings(payload.training, user_id)
     return {"ok": True}

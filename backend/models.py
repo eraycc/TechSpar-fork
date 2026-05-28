@@ -169,9 +169,20 @@ class LLMSettings(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
 
 
+class EmbeddingSettings(BaseModel):
+    """Global embedding provider configuration."""
+    backend: str = ""  # api | local | "" (auto-infer from api_base/api_key)
+    api_base: str = ""
+    api_key: str = ""
+    api_model: str = ""
+    local_model: str = ""
+    local_path: str = ""
+
+
 class SettingsResponse(BaseModel):
     """Combined response for GET/PUT /settings."""
     llm: LLMSettings
+    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     training: UserSettings
 
 

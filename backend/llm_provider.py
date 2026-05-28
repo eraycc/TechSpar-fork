@@ -91,3 +91,9 @@ def _reset_llama_singleton():
     """Reset LlamaIndex LLM singleton so next call picks up new settings."""
     global _llama_llm_instance
     _llama_llm_instance = None
+
+
+def _reset_embedding_singleton():
+    """Reset embedding singleton so next call picks up new settings."""
+    global _embedding_instance
+    _embedding_instance = None

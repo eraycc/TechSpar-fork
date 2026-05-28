@@ -13,6 +13,7 @@ import {
   Download,
   Upload,
   AlertTriangle,
+  Boxes,
 } from "lucide-react";
 import { getSettings, updateSettings } from "../api/interview";
 import {
@@ -108,10 +109,20 @@ export default function Settings() {
   const [numQuestions, setNumQuestions] = useState(10);
   const [divergence, setDivergence] = useState(3);
   const [showKey, setShowKey] = useState(false);
+
+  // Embedding 配置（全局，hot-reload）
+  const [embBackend, setEmbBackend] = useState("");  // "" | api | local
+  const [embApiBase, setEmbApiBase] = useState("");
+  const [embApiKey, setEmbApiKey] = useState("");
+  const [embApiModel, setEmbApiModel] = useState("");
+  const [embLocalModel, setEmbLocalModel] = useState("");
+  const [embLocalPath, setEmbLocalPath] = useState("");
+  const [showEmbKey, setShowEmbKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("llm");
 
   // 声纹识别状态
   const [vpStatus, setVpStatus] = useState({ configured: false, enrolled: false });
@@ -132,6 +143,21 @@ export default function Settings() {
   const vpInputRateRef = useRef(VP_SAMPLE_RATE);
   const vpTimerRef = useRef(null);
 
+  // Section refs for scrollspy
+  const llmRef = useRef(null);
+  const embeddingRef = useRef(null);
+  const voiceprintRef = useRef(null);
+  const trainingRef = useRef(null);
+  const migrationRef = useRef(null);
+  const sectionRefs = {
+    llm: llmRef,
+    embedding: embeddingRef,
+    voiceprint: voiceprintRef,
+    training: trainingRef,
+    migration: migrationRef,
+  };
+  const scrollSpyLock = useRef(0);
+
   // 数据迁移状态
   const [exporting, setExporting] = useState(false);
   const [importFile, setImportFile] = useState(null);
@@ -150,6 +176,13 @@ export default function Settings() {
         setApiKey(data.llm.api_key || "");
         setModel(data.llm.model || "");
         setTemperature(data.llm.temperature ?? 0.7);
+        const emb = data.embedding || {};
+        setEmbBackend(emb.backend || "");
+        setEmbApiBase(emb.api_base || "");
+        setEmbApiKey(emb.api_key || "");
+        setEmbApiModel(emb.api_model || "");
+        setEmbLocalModel(emb.local_model || "");
+        setEmbLocalPath(emb.local_path || "");
         setNumQuestions(data.training.num_questions ?? 10);
         setDivergence(data.training.divergence ?? 3);
       })
@@ -179,6 +212,47 @@ export default function Settings() {
   }, []);
 
   useEffect(() => () => cleanupRecorder(), [cleanupRecorder]);
+
+  // ScrollSpy: highlight tab whose section is most prominent in the viewport
+  useEffect(() => {
+    if (loading) return;
+    const anyEl = llmRef.current;
+    if (!anyEl) return;
+    const scroller = anyEl.closest("main") || null;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (Date.now() < scrollSpyLock.current) return;
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length === 0) return;
+        const id = visible[0].target.getAttribute("data-tab-id");
+        if (id) setActiveTab(id);
+      },
+      {
+        root: scroller,
+        rootMargin: "-15% 0px -55% 0px",
+        threshold: 0,
+      }
+    );
+
+    Object.values(sectionRefs).forEach((ref) => {
+      if (ref.current) observer.observe(ref.current);
+    });
+
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  const handleTabClick = (id) => {
+    setActiveTab(id);
+    const el = sectionRefs[id]?.current;
+    if (!el) return;
+    // Suppress scrollspy briefly while the smooth scroll plays out
+    scrollSpyLock.current = Date.now() + 700;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const handleSaveVpCredentials = async () => {
     setVpBusy(true);
@@ -340,6 +414,14 @@ export default function Settings() {
     try {
       await updateSettings({
         llm: { api_base: apiBase, api_key: apiKey, model, temperature },
+        embedding: {
+          backend: embBackend,
+          api_base: embApiBase,
+          api_key: embApiKey,
+          api_model: embApiModel,
+          local_model: embLocalModel,
+          local_path: embLocalPath,
+        },
         training: { num_questions: numQuestions, divergence },
       });
       setSaved(true);
@@ -362,16 +444,58 @@ export default function Settings() {
   const labelClass = "text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/80";
   const inputClass = "h-12 rounded-2xl bg-card/90";
 
+  const TABS = [
+    { id: "llm", label: "LLM 服务", icon: Server },
+    { id: "embedding", label: "Embedding", icon: Boxes },
+    { id: "voiceprint", label: "声纹识别", icon: Mic },
+    { id: "training", label: "训练参数", icon: Sliders },
+    { id: "migration", label: "数据迁移", icon: Database },
+  ];
+
   return (
-    <div className="flex-1 w-full max-w-[700px] mx-auto px-4 py-6 md:px-7 md:py-8">
-      <div className="mb-8">
+    <div className="flex-1 w-full max-w-[1080px] mx-auto px-4 pt-6 pb-0 md:px-7 md:pt-8">
+      <div className="mb-7">
         <div className="text-2xl md:text-[28px] font-display font-bold">设置</div>
         <div className="text-sm text-dim mt-1">配置 LLM 服务和训练参数</div>
       </div>
 
-      <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
+        {/* Left Tab Rail */}
+        <nav className="lg:sticky lg:top-4 lg:self-start">
+          <div className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-0.5 lg:overflow-visible">
+            {TABS.map((tab) => {
+              const { id, label } = tab;
+              const Icon = tab.icon;
+              const active = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => handleTabClick(id)}
+                  className={cn(
+                    "group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] transition-all duration-300 shrink-0 lg:w-full",
+                    active
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-dim hover:text-text hover:bg-hover"
+                  )}
+                >
+                  {active && (
+                    <div className="absolute left-0 top-1/2 hidden h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary drop-shadow-[0_0_4px_currentColor] lg:block" />
+                  )}
+                  <Icon
+                    size={16}
+                    className={cn("shrink-0", active ? "text-primary" : "text-dim group-hover:text-primary")}
+                  />
+                  <span className="truncate">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Right Content Pane */}
+        <div className="min-w-0 space-y-5">
         {/* LLM Provider */}
-        <Card className="overflow-hidden border-border/80 bg-card/76">
+        <Card ref={llmRef} data-tab-id="llm" className="overflow-hidden border-border/40 bg-card/40 scroll-mt-4">
           <CardContent className="p-5 md:p-7">
             <div className="flex items-center gap-2 mb-1">
               <Server size={16} className="text-primary" />
@@ -436,8 +560,124 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        {/* Embedding */}
+        <Card ref={embeddingRef} data-tab-id="embedding" className="overflow-hidden border-border/40 bg-card/40 scroll-mt-4">
+          <CardContent className="p-5 md:p-7">
+            <div className="flex items-center gap-2 mb-1">
+              <Boxes size={16} className="text-primary" />
+              <span className="text-base font-semibold">Embedding 模型</span>
+            </div>
+            <div className="text-[13px] text-dim mb-6">
+              用于题库 / 简历 / 知识库的向量化。改动保存后立即热切换，已建索引不会重建。
+            </div>
+
+            <div className="space-y-2.5 mb-5">
+              <Label className={labelClass}>后端模式</Label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "", label: "自动", hint: "填了 API 走 API，否则本地" },
+                  { value: "api", label: "API", hint: "OpenAI 兼容接口" },
+                  { value: "local", label: "本地", hint: "HuggingFace 模型" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value || "auto"}
+                    type="button"
+                    onClick={() => setEmbBackend(opt.value)}
+                    className={cn(
+                      "px-4 py-2 rounded-xl border text-sm transition-all",
+                      embBackend === opt.value
+                        ? "bg-primary/12 text-primary border-primary/50 font-medium"
+                        : "border-border bg-card/80 text-dim hover:text-text hover:bg-hover"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="text-[12px] text-dim/70 mt-1 min-h-[18px]">
+                {[
+                  { value: "", hint: "填了 API 字段走 API，否则走本地（兼容老配置）" },
+                  { value: "api", hint: "通过 OpenAI 兼容接口请求 embedding" },
+                  { value: "local", hint: "用 HuggingFace 加载本地模型，需 `pip install -r requirements.local-embedding.txt`" },
+                ].find((o) => o.value === embBackend)?.hint}
+              </div>
+            </div>
+
+            {(embBackend === "" || embBackend === "api") && (
+              <div className="space-y-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/60">API 模式</div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className={labelClass}>API Base URL</Label>
+                    <Input
+                      className={inputClass}
+                      placeholder="例：https://api.openai.com/v1（OpenAI 官方留空亦可）"
+                      value={embApiBase}
+                      onChange={(e) => setEmbApiBase(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className={labelClass}>Embedding Model</Label>
+                    <Input
+                      className={inputClass}
+                      placeholder="例：BAAI/bge-m3"
+                      value={embApiModel}
+                      onChange={(e) => setEmbApiModel(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className={labelClass}>API Key</Label>
+                  <div className="relative">
+                    <Input
+                      className={cn(inputClass, "pr-11")}
+                      type={showEmbKey ? "text" : "password"}
+                      placeholder="sk-..."
+                      value={embApiKey}
+                      onChange={(e) => setEmbApiKey(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-dim hover:text-text transition-colors"
+                      onClick={() => setShowEmbKey((v) => !v)}
+                    >
+                      {showEmbKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(embBackend === "" || embBackend === "local") && (
+              <div className={cn("space-y-4", embBackend === "" && "mt-6 border-t border-border/40 pt-5")}>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/60">本地模式</div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className={labelClass}>Model Name</Label>
+                    <Input
+                      className={inputClass}
+                      placeholder="例：BAAI/bge-m3"
+                      value={embLocalModel}
+                      onChange={(e) => setEmbLocalModel(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className={labelClass}>本地路径 (可选)</Label>
+                    <Input
+                      className={inputClass}
+                      placeholder="留空时按 model name 在线下载"
+                      value={embLocalPath}
+                      onChange={(e) => setEmbLocalPath(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Voiceprint (Optional) */}
-        <Card className="overflow-hidden border-border/80 bg-card/76">
+        <Card ref={voiceprintRef} data-tab-id="voiceprint" className="overflow-hidden border-border/40 bg-card/40 scroll-mt-4">
           <CardContent className="p-5 md:p-7">
             <div className="flex items-center gap-2 mb-1">
               <Mic size={16} className="text-primary" />
@@ -554,7 +794,7 @@ export default function Settings() {
         </Card>
 
         {/* Training Params */}
-        <Card className="overflow-hidden border-border/80 bg-card/76">
+        <Card ref={trainingRef} data-tab-id="training" className="overflow-hidden border-border/40 bg-card/40 scroll-mt-4">
           <CardContent className="p-5 md:p-7">
             <div className="flex items-center gap-2 mb-1">
               <Sliders size={16} className="text-primary" />
@@ -608,7 +848,7 @@ export default function Settings() {
         </Card>
 
         {/* Data Migration */}
-        <Card className="overflow-hidden border-border/80 bg-card/76">
+        <Card ref={migrationRef} data-tab-id="migration" className="overflow-hidden border-border/40 bg-card/40 scroll-mt-4">
           <CardContent className="p-5 md:p-7">
             <div className="flex items-center gap-2 mb-1">
               <Database size={16} className="text-primary" />
@@ -730,15 +970,25 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+
+        </div>
       </div>
 
-      {/* Save */}
-      <div className="flex items-center justify-end gap-3 mt-6">
-        {error && <span className="text-sm text-red">{error}</span>}
-        <Button variant="gradient" className="px-8" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 size={15} className="animate-spin" /> : saved ? <Check size={15} /> : null}
-          {saving ? "保存中..." : saved ? "已保存" : "保存"}
-        </Button>
+      {/* Sticky save bar (commits LLM + training params; 声纹/数据迁移 各自保存) */}
+      <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-border/40 bg-background/85 px-4 py-3 backdrop-blur-md md:-mx-7 md:px-7">
+        <div className="flex items-center justify-end gap-4">
+          {error ? (
+            <span className="text-sm text-red">{error}</span>
+          ) : (
+            <span className="text-[12px] text-dim/70">
+              保存 LLM 服务 + Embedding + 训练参数。声纹与数据迁移各自独立保存。
+            </span>
+          )}
+          <Button variant="gradient" className="px-8" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 size={15} className="animate-spin" /> : saved ? <Check size={15} /> : null}
+            {saving ? "保存中..." : saved ? "已保存" : "保存"}
+          </Button>
+        </div>
       </div>
     </div>
   );
