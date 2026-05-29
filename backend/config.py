@@ -5,6 +5,53 @@ from pydantic_settings import BaseSettings
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-m3"
 
 
+# ── Embedding inference (single source of truth) ──
+# Free functions so both the global Settings object and per-user resolved
+# configs compute backend/model/path identically.
+
+def embedding_mode_of(backend: str, api_base: str, api_key: str) -> str:
+    if backend:
+        b = backend.strip().lower()
+        if b in {"api", "local"}:
+            return b
+        raise ValueError("EMBEDDING_BACKEND must be 'api' or 'local'")
+    if api_base or api_key:
+        return "api"
+    return "local"
+
+
+def embedding_api_model_of(api_model: str, deprecated_model: str = "") -> str:
+    return api_model or deprecated_model or DEFAULT_EMBEDDING_MODEL
+
+
+def embedding_local_model_of(local_model: str, deprecated_model: str = "") -> str:
+    return local_model or deprecated_model or DEFAULT_EMBEDDING_MODEL
+
+
+def embedding_local_path_of(
+    local_path: str, local_model: str, base_dir: Path, deprecated_model: str = ""
+) -> "Path | None":
+    if local_path:
+        return Path(local_path).expanduser()
+    bundled_path = base_dir / "data" / "models" / "bge-m3"
+    if embedding_local_model_of(local_model, deprecated_model) == DEFAULT_EMBEDDING_MODEL and bundled_path.exists():
+        return bundled_path
+    return None
+
+
+def embedding_target_of(
+    backend: str, api_base: str, api_key: str, api_model: str,
+    local_model: str, local_path: str, base_dir: Path, deprecated_model: str = "",
+) -> str:
+    """Identity string for an embedding config — also used as the cache/rebuild signature."""
+    if embedding_mode_of(backend, api_base, api_key) == "api":
+        return embedding_api_model_of(api_model, deprecated_model)
+    path = embedding_local_path_of(local_path, local_model, base_dir, deprecated_model)
+    if path is not None:
+        return str(path)
+    return embedding_local_model_of(local_model, deprecated_model)
+
+
 class Settings(BaseSettings):
     # LLM (OpenAI-compatible proxy)
     api_base: str = ""
@@ -88,6 +135,10 @@ class Settings(BaseSettings):
     def user_settings_path(self, user_id: str) -> Path:
         return self.user_data_dir(user_id) / "settings.json"
 
+    def user_provider_path(self, user_id: str) -> Path:
+        """Per-user LLM/Embedding provider overrides."""
+        return self.user_data_dir(user_id) / "provider.json"
+
     @property
     def effective_dashscope_api_key(self) -> str:
         """DashScope API key, with fallback to COPILOT_API_KEY when the Copilot
@@ -103,38 +154,25 @@ class Settings(BaseSettings):
         return ""
 
     def embedding_backend_mode(self) -> str:
-        if self.embedding_backend:
-            backend = self.embedding_backend.strip().lower()
-            if backend in {"api", "local"}:
-                return backend
-            raise ValueError("EMBEDDING_BACKEND must be 'api' or 'local'")
-        if self.embedding_api_base or self.embedding_api_key:
-            return "api"
-        return "local"
+        return embedding_mode_of(self.embedding_backend, self.embedding_api_base, self.embedding_api_key)
 
     def embedding_api_model_name(self) -> str:
-        return self.embedding_api_model or self.embedding_model or DEFAULT_EMBEDDING_MODEL
+        return embedding_api_model_of(self.embedding_api_model, self.embedding_model)
 
     def local_embedding_model_name(self) -> str:
-        return self.local_embedding_model or self.embedding_model or DEFAULT_EMBEDDING_MODEL
+        return embedding_local_model_of(self.local_embedding_model, self.embedding_model)
 
     def local_embedding_model_path(self) -> Path | None:
-        if self.local_embedding_path:
-            return Path(self.local_embedding_path).expanduser()
-
-        bundled_path = self.base_dir / "data" / "models" / "bge-m3"
-        if self.local_embedding_model_name() == DEFAULT_EMBEDDING_MODEL and bundled_path.exists():
-            return bundled_path
-        return None
+        return embedding_local_path_of(
+            self.local_embedding_path, self.local_embedding_model, self.base_dir, self.embedding_model
+        )
 
     def active_embedding_target(self) -> str:
-        if self.embedding_backend_mode() == "api":
-            return self.embedding_api_model_name()
-
-        model_path = self.local_embedding_model_path()
-        if model_path is not None:
-            return str(model_path)
-        return self.local_embedding_model_name()
+        return embedding_target_of(
+            self.embedding_backend, self.embedding_api_base, self.embedding_api_key,
+            self.embedding_api_model, self.local_embedding_model, self.local_embedding_path,
+            self.base_dir, self.embedding_model,
+        )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
