@@ -1139,6 +1139,78 @@ def _format_existing_behavior_signals(profile: dict) -> str:
     return "\n\n".join(parts)
 
 
+BEHAVIOR_EXTRACT_PROMPT = """你是面试教练的行为分析引擎。从面试记录里提取候选人作为面试者的「表现轴」行为模式。
+只看"怎么表达、怎么思考、怎么讲项目、怎么自评",不评判知识对错。
+
+## 候选人已有的 behavior_signals（优先复用这些 ID，不要起新名字除非真的不同）
+{existing_behavior_signals}
+
+## 本次面试记录
+模式: {mode}
+领域: {topic}
+{transcript}
+
+## 四个 namespace（**锁定，不可创新**）
+- reasoning：推导/思维方式（被追问 why 时如何应对、能否从底层推导、是否跳步）
+- narrative：项目叙事（讲项目的结构、量化指标、技术权衡是否讲清）
+- communication：表达特征（节奏、结构信号、清晰度、口头禅）
+- metacognition：元认知（自我评估准确性、对弱点的觉察、不懂装懂）
+
+## 每个 behavior_signal 是一个 op
+- **ADD**：全新模式。新 ID 格式严格为 `<namespace>.<snake_case_name>`，必须给 polarity（negative|positive）+ description（一句话锚定语义）+ snippet（本次证据）
+- **UPDATE**：复用上面已有 ID。只给 snippet（本次新证据）
+- **IMPROVE**：已有 negative 模式本次出现反向证据。给 evidence_snippet
+- **NOOP**：不输出
+
+ID 复用优先级最高：能用已有 ID 就**绝对不要**起新 ID。namespace 必须在四个里选。
+只提取本次明确暴露的行为，不要猜测。**宁可不输出，不要凑数**——专项问答这类信息量少的场景，没有可靠证据就返回空数组。
+
+## 输出（只返回 JSON）
+{{
+    "behavior_signals": [
+        {{"action": "ADD", "id": "reasoning.jump_to_conclusion", "namespace": "reasoning", "polarity": "negative", "description": "被追问 why 时跳过推导直接给结论", "snippet": "讲为什么用 RAG 时只说'更省钱'就停了"}},
+        {{"action": "UPDATE", "id": "narrative.lack_metrics", "snippet": "讲项目时没有任何数字指标"}}
+    ]
+}}
+"""
+
+
+async def extract_behavior_ops(transcript: str, user_id: str, mode: str, topic: str | None = None) -> list:
+    """Behavior-axis-only extraction for non-resume modes.
+
+    The resume path extracts behavior inside its big EXTRACT_PROMPT; drill / jd_prep /
+    recording extract only the knowledge axis in their own graphs. This shared pass gives
+    them the behavior axis too — always with the existing-signals prior so emergent IDs
+    stay deduplicated instead of fragmenting. Returns behavior_ops for llm_update_profile.
+
+    Copilot is intentionally NOT a caller: it writes predicted gaps, not observed answers,
+    so it has no transcript to judge behavior from.
+    """
+    transcript = (transcript or "").strip()
+    if not transcript:
+        return []
+
+    profile = _load_profile(user_id)
+    prompt = BEHAVIOR_EXTRACT_PROMPT.format(
+        existing_behavior_signals=_format_existing_behavior_signals(profile),
+        mode=mode,
+        topic=topic or "综合",
+        transcript=transcript,
+    )
+    llm = get_langchain_llm(user_id)
+    response = llm.invoke([
+        SystemMessage(content="你是面试行为分析引擎。只返回 JSON。宁可不输出,不要凑数。"),
+        HumanMessage(content=prompt),
+    ])
+    try:
+        parsed = _parse_json_safe(response.content)
+        ops = parsed.get("behavior_signals", []) if isinstance(parsed, dict) else []
+        return ops if isinstance(ops, list) else []
+    except (json.JSONDecodeError, ValueError, KeyError) as exc:
+        logger.warning(f"Behavior extraction parse failed ({mode}): {exc}")
+        return []
+
+
 async def update_profile_after_interview(
     mode: str,
     topic: str | None,
