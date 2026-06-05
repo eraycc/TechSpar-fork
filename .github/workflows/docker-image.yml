@@ -1,4 +1,4 @@
-name: 构建推送 Docker 镜像到 GHCR
+name: 构建推送统一 Docker 镜像到 GHCR
 
 on:
   push:
@@ -54,6 +54,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
+        file: ./Dockerfile  # 使用根目录的统一 Dockerfile
         no-cache: true
         platforms: linux/amd64,linux/arm64
         push: ${{ github.event_name != 'pull_request' }}
