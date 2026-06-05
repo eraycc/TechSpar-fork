@@ -27,7 +27,7 @@ RUN apt-get update \
     && pip install --upgrade pip
 
 # 复制后端依赖并安装
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制后端代码
