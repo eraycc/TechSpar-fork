@@ -90,8 +90,8 @@ def rebuild_index(user_id: str = Depends(get_current_user)):
 
     def event_stream():
         from backend.indexer import (
-            build_resume_index,
-            build_topic_index,
+            ingest_resume,
+            ingest_topic,
             invalidate_user_embeddings,
             load_topics,
         )
@@ -125,11 +125,11 @@ def rebuild_index(user_id: str = Depends(get_current_user)):
                     rebuild_index_from_profile(user_id)
                     result["weak_points"] = True
                 elif key == "resume":
-                    build_resume_index(user_id, force_rebuild=True)
+                    ingest_resume(user_id)
                     result["resume"] = True
                 elif key.startswith("topic:"):
                     topic = key.split(":", 1)[1]
-                    build_topic_index(topic, user_id, force_rebuild=True)
+                    ingest_topic(topic, user_id)
                     result["topics"].append(topic)
             except Exception as exc:  # noqa: BLE001 - best-effort per source; skip and continue
                 logger.warning("Reindex step '%s' failed for user %s: %s", key, user_id, exc)
