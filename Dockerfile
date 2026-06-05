@@ -3,23 +3,34 @@ FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# 先复制依赖文件（利用 Docker 缓存）
+# 复制前端依赖文件
 COPY frontend/package.json frontend/package-lock.json* ./
 
 # 安装所有依赖
 RUN npm ci
 
-# 复制源码并构建
+# 复制前端源码并构建
 COPY frontend/ .
 RUN npm run build
 
-# 阶段2: 构建后端
+# 阶段2: 构建后端（包含编译环境）
 FROM python:3.11-slim AS backend-builder
 
 WORKDIR /app
 
-# 复制后端依赖并安装（利用 Docker 缓存）
+# 安装编译依赖（webrtcvad 需要 gcc 等）
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gcc \
+        g++ \
+        python3-dev \
+        make \
+    && rm -rf /var/lib/apt/lists/*
+
+# 从根目录复制 requirements.txt（注意路径）
 COPY requirements.txt .
+
+# 安装 Python 依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 阶段3: 最终镜像
@@ -27,24 +38,24 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装运行时依赖（只安装必要的，不包含 gcc 等编译工具）
+# 安装运行时依赖
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         nginx \
         supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# 从后端构建阶段复制 Python 包
+# 从后端构建阶段复制已编译的 Python 包
 COPY --from=backend-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
-# 复制后端代码
+# 复制后端代码（backend 目录）
 COPY backend/ backend/
 
 # 从前端构建阶段复制构建产物
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
-# 配置 nginx（如果没有自定义配置）
+# 配置 nginx
 RUN echo 'server { \
     listen 80; \
     server_name _; \
