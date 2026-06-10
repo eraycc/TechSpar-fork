@@ -740,9 +740,9 @@ def _deterministic_update(profile: dict, new_weak: list, new_strong: list,
         ]
         if active_weak:
             from backend.vector_memory import _embed, _cosine_similarity
-            sp_vec = _embed(sp_text)
+            sp_vec = _embed(sp_text, user_id)
             weak_texts = [w["point"] for _, w in active_weak]
-            weak_vecs = np.stack([_embed(t) for t in weak_texts])
+            weak_vecs = np.stack([_embed(t, user_id) for t in weak_texts])
             sims = _cosine_similarity(sp_vec, weak_vecs)
             best_local = int(np.argmax(sims))
             if float(sims[best_local]) >= 0.5:
