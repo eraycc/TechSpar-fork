@@ -370,12 +370,10 @@ def get_topic_context_for_drill(topic: str, user_id: str) -> dict:
     topic_weak_wps.sort(key=lambda w: _weak_point_weight(w, now), reverse=True)
     topic_weak = [w["point"] for w in topic_weak_wps]
 
-    # Recent questions from score_history for this topic
-    recent_questions = [
-        h.get("question", "")
-        for h in profile.get("stats", {}).get("score_history", [])
-        if h.get("topic") == topic and h.get("question")
-    ][-20:]
+    # Recent questions asked in this topic — anti-repeat context for generation.
+    # score_history 从不存题目文本,必须从 sessions 存储读,否则永远为空。
+    from backend.storage.sessions import list_recent_questions
+    recent_questions = list_recent_questions(topic, user_id=user_id)
 
     # Semantic retrieval of past insights for this topic
     past_insights = []
