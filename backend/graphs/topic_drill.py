@@ -114,6 +114,23 @@ def generate_drill_questions(
             "- 20% 概念题（考边界 case 和底层原理），80% 场景设计 + 系统权衡题"
         )
 
+    # 趋势调难度: 明显上升时上探一档验证提升是否扎实,明显下滑时降下限巩固基础
+    trend = drill_ctx.get("trend")
+    if trend and abs(trend["delta"]) >= 1.5:
+        n = len(trend["scores"])
+        if trend["direction"] == "up" and diff_max < 5:
+            diff_max += 1
+            question_strategy += (
+                f"\n- 近 {n} 次训练均分从 {trend['first']} 升到 {trend['last']}，进步明显——"
+                "适当上探更高难度，验证提升是否扎实"
+            )
+        elif trend["direction"] == "down" and diff_min > 1:
+            diff_min -= 1
+            question_strategy += (
+                f"\n- 近 {n} 次训练均分从 {trend['first']} 降到 {trend['last']}——"
+                "适当回落难度，先巩固基础再上探"
+            )
+
     weak_ratio = _DIVERGENCE_TO_WEAK_RATIO.get(divergence, 0.3)
     weak_count = round(num_questions * weak_ratio)
 

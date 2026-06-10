@@ -348,6 +348,28 @@ def _weak_point_weight(wp: dict, now: datetime) -> float:
     return recency * freq_mult
 
 
+def get_topic_score_trend(profile: dict, topic: str, window: int = 5) -> dict | None:
+    """近 N 次该领域训练的均分趋势，从 score_history 派生，零额外存储。
+
+    至少 2 次有分记录才有趋势。direction 阈值 ±0.5 分，避免噪声当趋势。
+    """
+    scores = [
+        h["avg_score"] for h in profile.get("stats", {}).get("score_history", [])
+        if h.get("topic") == topic and isinstance(h.get("avg_score"), (int, float))
+    ][-window:]
+    if len(scores) < 2:
+        return None
+    delta = round(scores[-1] - scores[0], 1)
+    direction = "up" if delta >= 0.5 else "down" if delta <= -0.5 else "flat"
+    return {
+        "scores": scores,
+        "first": scores[0],
+        "last": scores[-1],
+        "delta": delta,
+        "direction": direction,
+    }
+
+
 def get_topic_context_for_drill(topic: str, user_id: str) -> dict:
     """Get personalized context for drill question generation."""
     profile = _load_profile(user_id)
@@ -356,6 +378,13 @@ def get_topic_context_for_drill(topic: str, user_id: str) -> dict:
     mastery_score = mastery.get("score", mastery.get("level", 0) * 20)
     mastery_notes = mastery.get("notes", "新领域，暂无历史数据" if mastery_score == 0 else "")
     mastery_info = f"{mastery_score}/100 — {mastery_notes}"
+
+    trend = get_topic_score_trend(profile, topic)
+    if trend:
+        arrow = {"up": "↗", "down": "↘", "flat": "→"}[trend["direction"]]
+        mastery_info += (
+            f"；近 {len(trend['scores'])} 次训练均分 {trend['first']} → {trend['last']} {arrow}"
+        )
 
     # Weak points for this topic (knowledge only — legacy axis=performance excluded),
     # most salient first via recency×frequency decay.
@@ -393,6 +422,7 @@ def get_topic_context_for_drill(topic: str, user_id: str) -> dict:
     return {
         "mastery_info": mastery_info,
         "mastery_score": mastery_score,
+        "trend": trend,
         "weak_points": topic_weak,
         "recent_questions": recent_questions,
         "past_insights": past_insights,
