@@ -52,6 +52,14 @@ def infer_target_role(user_id: str = Depends(get_current_user)):
     return {"target_role": role}
 
 
+@router.post("/profile/viewed")
+async def profile_viewed(user_id: str = Depends(get_current_user)):
+    """Reset the visit baseline used by the profile page's since-last-visit delta."""
+    from backend.memory import mark_profile_viewed
+
+    return await mark_profile_viewed(user_id)
+
+
 @router.post("/profile/pattern/feedback")
 async def pattern_feedback(body: dict, user_id: str = Depends(get_current_user)):
     """User feedback on a consolidated pattern: accurate / inaccurate / acknowledged."""

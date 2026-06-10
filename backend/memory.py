@@ -295,6 +295,27 @@ def get_profile(user_id: str) -> dict:
     return _load_profile(user_id)
 
 
+async def mark_profile_viewed(user_id: str) -> dict:
+    """记录画像页访问基线快照，前端据此派生"自上次访问"的 delta 视图。
+
+    快照存 total_sessions 和各 topic 当时的掌握度，使 mastery 变化可以精确计算
+    （score_history 只有 session 均分，推不出掌握度差值）。
+    """
+    async with _get_profile_lock(user_id):
+        profile = _load_profile(user_id)
+        marker = {
+            "at": datetime.now().isoformat(),
+            "total_sessions": profile.get("stats", {}).get("total_sessions", 0),
+            "topic_scores": {
+                t: v.get("score", v.get("level", 0) * 20)
+                for t, v in profile.get("topic_mastery", {}).items()
+            },
+        }
+        profile["view_marker"] = marker
+        _save_profile(profile, user_id)
+        return marker
+
+
 async def update_target_role(user_id: str, target_role: str) -> None:
     """Persist target_role as the sticky default for future sessions."""
     target_role = (target_role or "").strip()

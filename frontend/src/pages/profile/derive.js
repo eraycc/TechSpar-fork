@@ -165,6 +165,49 @@ export function buildBehaviorSignals(profile) {
   };
 }
 
+// "自上次访问"delta: 与后端 view_marker 基线对比,全部确定性派生,不依赖 LLM。
+// 返回 null 表示没有基线或没有任何变化(首次访问 / 两次访问之间没训练)。
+export function buildVisitDelta(profile, canonicalTopics) {
+  const marker = profile?.view_marker;
+  const since = toTimestamp(marker?.at);
+  if (!since) return null;
+
+  const weakPoints = profile.weak_points || [];
+  const isActive = (item) => !item.improved && !item.archived && isKnowledgeAxis(item);
+
+  const newWeak = weakPoints.filter(
+    (item) => item.source !== "consolidated" && isActive(item) && toTimestamp(item.first_seen) > since
+  );
+  const newPatterns = weakPoints.filter(
+    (item) => item.source === "consolidated" && isActive(item) && toTimestamp(item.first_seen) > since
+  );
+  const newlyImproved = weakPoints.filter(
+    (item) => item.improved && toTimestamp(item.improved_at) > since
+  );
+
+  const masteryChanges = [];
+  const baseScores = marker.topic_scores || {};
+  for (const [topic, data] of Object.entries(profile.topic_mastery || {})) {
+    if (canonicalTopics && canonicalTopics.size > 0 && !canonicalTopics.has(topic)) continue;
+    const current = getMasteryScore(data);
+    const base = baseScores[topic];
+    if (current == null || typeof base !== "number") continue;
+    const diff = Number((current - base).toFixed(1));
+    if (Math.abs(diff) >= 1) masteryChanges.push({ topic, from: base, to: current, diff });
+  }
+  masteryChanges.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+
+  const sessionsDelta = Math.max(
+    0,
+    (profile.stats?.total_sessions || 0) - (marker.total_sessions || 0)
+  );
+
+  if (!sessionsDelta && !newWeak.length && !newPatterns.length && !newlyImproved.length && !masteryChanges.length) {
+    return null;
+  }
+  return { since: marker.at, sessionsDelta, newWeak, newPatterns, newlyImproved, masteryChanges };
+}
+
 export function getRealTopicSet(profile, history, canonicalTopics) {
   const candidates = new Set(Object.keys(profile.topic_mastery || {}));
 
