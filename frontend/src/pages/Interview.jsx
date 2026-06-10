@@ -29,6 +29,7 @@ export default function Interview() {
 
   const isBatchMode = initData?.mode === "topic_drill" || initData?.mode === "jd_prep";
   const isJobPrep = initData?.mode === "jd_prep";
+  const isDrill = initData?.mode === "topic_drill";
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -41,6 +42,9 @@ export default function Interview() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [drillInput, setDrillInput] = useState("");
+  // 每题自评(有把握/没把握),喂给后端做元认知校准;可关闭,偏好存 localStorage
+  const [confidences, setConfidences] = useState({});
+  const [selfAssess, setSelfAssess] = useState(() => localStorage.getItem("drill-self-assess") !== "off");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -135,6 +139,13 @@ export default function Interview() {
     else setFinished(true);
   };
 
+  const toggleSelfAssess = () => {
+    setSelfAssess((on) => {
+      localStorage.setItem("drill-self-assess", on ? "off" : "on");
+      return !on;
+    });
+  };
+
   const handleSkip = () => {
     if (!currentQ) return;
     setDrillInput("");
@@ -159,6 +170,7 @@ export default function Interview() {
       const answerList = questions.map((q) => ({
         question_id: q.id,
         answer: answers[q.id] || "",
+        ...(confidences[q.id] ? { confidence: confidences[q.id] } : {}),
       }));
       await endInterview(sessionId, answerList);
       setSubmitted(true);
@@ -491,6 +503,48 @@ export default function Interview() {
                   )}
                 </div>
                 <div className="flex items-center justify-end gap-3">
+                  {isDrill && (selfAssess ? (
+                    <div className="mr-auto flex items-center gap-2">
+                      <span className="text-[12px] text-dim">这题有把握吗？</span>
+                      {[
+                        { key: "high", label: "有把握" },
+                        { key: "low", label: "没把握" },
+                      ].map(({ key, label }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setConfidences((prev) => ({
+                            ...prev,
+                            [currentQ.id]: prev[currentQ.id] === key ? undefined : key,
+                          }))}
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-[12px] transition-colors cursor-pointer",
+                            confidences[currentQ.id] === key
+                              ? "border-primary/50 bg-primary/10 text-primary"
+                              : "border-border text-dim hover:text-text"
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={toggleSelfAssess}
+                        className="text-[12px] text-dim/50 hover:text-dim transition-colors cursor-pointer"
+                        title="关闭答题自评"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={toggleSelfAssess}
+                      className="mr-auto text-[11px] text-dim/50 hover:text-dim transition-colors cursor-pointer"
+                    >
+                      开启答题自评
+                    </button>
+                  ))}
                   <Button variant="ghost" size="sm" onClick={handleSkip}>
                     跳过
                   </Button>

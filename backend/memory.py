@@ -1308,6 +1308,62 @@ ID 复用优先级最高：能用已有 ID 就**绝对不要**起新 ID。namesp
 """
 
 
+def build_calibration_ops(questions: list, answers: list, scores: list) -> list:
+    """答题自评 vs 实际得分的确定性元认知校准，零 LLM 调用。
+
+    自评有把握（confidence=high）但得分 ≤4 → 过度自信证据；
+    自评没把握（confidence=low）但得分 ≥8 → 过度保守证据。
+    每场每个方向最多一条 op，snippet 带量化比例和例题。
+    ADD 落在已有 ID 上会被 _apply_behavior_ops 降级为 UPDATE（语义锚定在首次 description）。
+    """
+    conf_map = {}
+    for a in answers or []:
+        if isinstance(a, dict) and a.get("confidence") in ("high", "low"):
+            conf_map[a.get("question_id")] = a["confidence"]
+    if not conf_map:
+        return []
+
+    q_text = {q.get("id"): q.get("question", "") for q in questions or [] if isinstance(q, dict)}
+    score_map = {}
+    for s in scores or []:
+        if not isinstance(s, dict):
+            continue
+        try:
+            score_map[s.get("question_id")] = float(s["score"])
+        except (TypeError, ValueError, KeyError):
+            continue
+
+    high = [(qid, sc) for qid, sc in score_map.items() if conf_map.get(qid) == "high"]
+    low = [(qid, sc) for qid, sc in score_map.items() if conf_map.get(qid) == "low"]
+
+    ops = []
+    over = [(qid, sc) for qid, sc in high if sc <= 4]
+    if over:
+        qid, sc = over[0]
+        example = (q_text.get(qid) or "")[:30]
+        ops.append({
+            "action": "ADD",
+            "id": "metacognition.overconfident",
+            "namespace": "metacognition",
+            "polarity": "negative",
+            "description": "自评有把握的题实际得分偏低，自我评估偏高",
+            "snippet": f"自评有把握的 {len(high)} 题中 {len(over)} 题得分 ≤4（如「{example}」{sc:g}/10）",
+        })
+    under = [(qid, sc) for qid, sc in low if sc >= 8]
+    if under:
+        qid, sc = under[0]
+        example = (q_text.get(qid) or "")[:30]
+        ops.append({
+            "action": "ADD",
+            "id": "metacognition.underconfident",
+            "namespace": "metacognition",
+            "polarity": "negative",
+            "description": "自评没把握的题实际得分很高，自我评估偏保守",
+            "snippet": f"自评没把握的 {len(low)} 题中 {len(under)} 题得分 ≥8（如「{example}」{sc:g}/10）",
+        })
+    return ops
+
+
 async def extract_behavior_ops(transcript: str, user_id: str, mode: str, topic: str | None = None) -> list:
     """Behavior-axis-only extraction for non-resume modes.
 
