@@ -872,6 +872,53 @@ def _update_thinking_patterns(profile: dict, patterns: dict, user_id: str):
         _append_if_novel(tp["gaps"], g, "thinking_gap", user_id)
 
 
+def _decay_consolidated_patterns(profile: dict, now: str) -> int:
+    """支撑证据大多已改善的 consolidated pattern 自动降权/标记改善（确定性，无 LLM）。
+
+    pattern 的 consolidates 存的是支撑它的原始弱点文本。原始弱点被训练改善后，
+    pattern 不该继续以原 confidence 置顶：
+    - 全部支撑点 improved → pattern 也标记 improved
+    - 过半 improved → 一次性降 confidence（用 history 事件保证幂等）
+    支撑点文本被 UPDATE 改写后匹配不到 → 保守跳过，不衰减。
+    Returns number of patterns changed.
+    """
+    originals = {
+        wp.get("point", ""): wp
+        for wp in profile.get("weak_points", [])
+        if wp.get("source", "observed") != "consolidated"
+    }
+    changed = 0
+    for wp in profile.get("weak_points", []):
+        if wp.get("source") != "consolidated" or wp.get("archived") or wp.get("improved"):
+            continue
+        supports = [originals[p] for p in wp.get("consolidates", []) if p in originals]
+        if not supports:
+            continue
+        improved_ratio = sum(1 for s in supports if s.get("improved")) / len(supports)
+        if improved_ratio >= 1.0:
+            wp["improved"] = True
+            wp["improved_at"] = now
+            wp.setdefault("history", []).append({
+                "date": now,
+                "event": "improved",
+                "reason": "all_supporting_points_improved",
+            })
+            changed += 1
+        elif improved_ratio >= 0.5:
+            already_decayed = any(
+                h.get("event") == "confidence_decayed" for h in wp.get("history", [])
+            )
+            if not already_decayed:
+                wp["confidence"] = round(max(0.0, wp.get("confidence", 0.7) - 0.2), 2)
+                wp.setdefault("history", []).append({
+                    "date": now,
+                    "event": "confidence_decayed",
+                    "reason": f"{improved_ratio:.0%}_supporting_points_improved",
+                })
+                changed += 1
+    return changed
+
+
 def _archive_stale_weak_points(profile: dict):
     """Long-horizon graveyard cleanup — caps unbounded growth of one-off weak points.
 
@@ -1048,6 +1095,7 @@ async def llm_update_profile(
             )
 
         _archive_stale_weak_points(profile)
+        _decay_consolidated_patterns(profile, now)
 
         _save_profile(profile, user_id)
 
