@@ -137,7 +137,10 @@ export default function Profile() {
 
             <div className="mt-7 text-xs font-medium text-dim">选一个方式开始第一场面试</div>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {startOptions.map(({ path, icon: Icon, title, desc, hint }) => (
+              {startOptions.map((option) => {
+                // eslint 没配 jsx-uses-vars,解构参数会被误报 unused;局部变量走 varsIgnorePattern
+                const { path, icon: Icon, title, desc, hint } = option;
+                return (
                 <button
                   key={path}
                   onClick={() => navigate(path)}
@@ -155,7 +158,8 @@ export default function Profile() {
                   </div>
                   <div className="text-[11px] font-medium text-primary/80">{hint}</div>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
