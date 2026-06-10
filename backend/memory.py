@@ -474,7 +474,13 @@ def get_profile_summary(user_id: str) -> str:
         parts.append("跨领域规律（系统从多次训练归纳）:\n  - " + "\n  - ".join(consolidated))
 
     if profile.get("strong_points"):
-        points = ", ".join(s["point"] for s in profile["strong_points"][:5])
+        # 按时间倒序: 列表是插入序,直接 [:5] 永远只注入最早的几条
+        recent_strong = sorted(
+            profile["strong_points"],
+            key=lambda s: s.get("first_seen", ""),
+            reverse=True,
+        )
+        points = ", ".join(s["point"] for s in recent_strong[:5])
         parts.append(f"知识强项: {points}")
 
     # 表现轴:行为模式
