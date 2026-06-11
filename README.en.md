@@ -240,7 +240,7 @@ http://localhost:5173/copilot
 
 | Component | Technology |
 | --- | --- |
-| Backend | FastAPI, LangChain, LangGraph, LlamaIndex |
+| Backend | FastAPI, LangChain, LangGraph |
 | Frontend | React 19, React Router v7, Vite, Tailwind CSS v4 |
 | Storage | SQLite, semantic embeddings |
 | Auth | JWT, bcrypt |

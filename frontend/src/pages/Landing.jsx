@@ -187,12 +187,6 @@ const MEMORY_LAYERS = [
   },
 ];
 
-const MEMORY_SIGNALS = [
-  "简历 / JD / 最近训练",
-  "掌握度 / 弱点 / 趋势",
-  "表达习惯 / 高危路径 / 实战失误",
-];
-
 const revealStyle = (delay) => ({ "--reveal-delay": `${delay}s` });
 
 /* ── Typing effect for detail panel preview lines ── */
@@ -446,90 +440,39 @@ export default function Landing() {
                 );
               })}
             </div>
-
-            <Card
-              className="reveal-item mt-6 rounded-[28px] border-primary/15 bg-gradient-to-br from-primary/10 via-card to-teal/8 shadow-[0_24px_80px_rgba(245,158,11,0.12)]"
-              style={revealStyle(0.2)}
-            >
-              <CardContent className="p-6 md:p-8">
-                <div className="grid gap-8 lg:grid-cols-[0.95fr,1.05fr] lg:items-center">
-                  <div>
-                    <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                      <Repeat size={13} />
-                      画像回写驱动下一轮
-                    </div>
-                    <h3 className="mt-4 text-2xl font-display font-bold tracking-tight md:text-3xl">
-                      你不是在开启一场练习，而是在持续更新一套面试系统
-                    </h3>
-                    <p className="mt-4 max-w-2xl text-sm leading-7 text-dim md:text-base">
-                      一次专项训练会暴露薄弱点，一次 JD 备面会改变你的风险优先级，一次真实面试的录音复盘会修正你的表达问题。
-                      这些数据不会散落在不同页面里，而是一起回写到下一轮。
-                    </p>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {MEMORY_SIGNALS.map((item, index) => (
-                      <div
-                        key={item}
-                        className="reveal-item rounded-2xl border border-border/80 bg-bg/85 px-4 py-4 text-sm text-dim shadow-sm"
-                        style={revealStyle(0.28 + index * 0.07)}
-                      >
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </section>
 
-        <section ref={ctaRef} className="scroll-reveal px-6 pb-20 md:px-10 md:pb-24">
-          <div className="mx-auto max-w-7xl">
-            <Card className="reveal-item overflow-hidden rounded-[30px] border-border/80 bg-card/95 shadow-[0_30px_100px_rgba(15,23,42,0.08)]" style={revealStyle(0.08)}>
-              <CardContent className="p-6 md:p-8">
-                <div className="grid gap-8 lg:grid-cols-[1fr,0.85fr] lg:items-center">
-                  <div>
-                    <div className="text-sm font-medium text-primary">准备、模拟、实战、复盘，全部接进同一条闭环</div>
-                    <h2 className="mt-3 text-2xl font-display font-bold tracking-tight md:text-4xl">
-                      从第一轮刷题开始，到真实面试结束后复盘，系统都不会忘记你
-                    </h2>
-                    <p className="mt-4 max-w-2xl text-sm leading-7 text-dim md:text-base">
-                      这不是另一个只会生成题目的 AI 工具，而是一套从刷题到实战的技术面试陪练系统。
-                    </p>
+        <section
+          ref={ctaRef}
+          className="scroll-reveal relative flex min-h-screen items-center justify-center overflow-hidden px-6 md:px-10"
+        >
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[130px]" />
+          </div>
 
-                    <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                      <Button variant="gradient" size="lg" onClick={() => navigate("/login")}>
-                        进入 Demo
-                        <ArrowRight size={16} />
-                      </Button>
-                      <Button variant="outline" size="lg" onClick={scrollToLoop}>
-                        继续看闭环
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {[
-                      "专项训练先补短板",
-                      "简历面试校正项目表达",
-                      "JD 备面重排岗位优先级",
-                      "实时 Copilot 辅助真实面试",
-                      "录音复盘把失误写回系统",
-                      "下一轮训练自动更有针对性",
-                    ].map((item, index) => (
-                      <div
-                        key={item}
-                        className="reveal-item rounded-2xl border border-border/80 bg-bg/85 px-4 py-4 text-sm text-dim shadow-sm"
-                        style={revealStyle(0.16 + index * 0.06)}
-                      >
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="relative mx-auto max-w-4xl text-center">
+            <div className="reveal-item text-sm font-medium text-primary" style={revealStyle(0.04)}>
+              准备、模拟、实战、复盘，全部接进同一条闭环
+            </div>
+            <h2
+              className="reveal-item mt-5 text-4xl font-display font-bold tracking-tight md:text-6xl md:leading-[1.1]"
+              style={revealStyle(0.1)}
+            >
+              从第一轮刷题开始，到真实面试结束后复盘，系统都不会忘记你
+            </h2>
+            <p
+              className="reveal-item mx-auto mt-6 max-w-xl text-base leading-8 text-dim md:text-lg"
+              style={revealStyle(0.16)}
+            >
+              这不是另一个只会生成题目的 AI 工具，而是一套从刷题到实战的技术面试陪练系统。
+            </p>
+            <div className="reveal-item mt-10 flex justify-center" style={revealStyle(0.22)}>
+              <Button variant="gradient" size="lg" onClick={() => navigate("/login")}>
+                进入 Demo
+                <ArrowRight size={16} />
+              </Button>
+            </div>
           </div>
         </section>
       </main>

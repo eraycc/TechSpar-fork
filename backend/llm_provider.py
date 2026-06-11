@@ -11,9 +11,9 @@ backends (esp. local HuggingFace models) are expensive, so they are cached per
 """
 
 from langchain_openai import ChatOpenAI
-from llama_index.llms.openai_like import OpenAILike
 
 from backend.config import (
+    DEFAULT_API_EMBED_BATCH_SIZE,
     embedding_api_model_of,
     embedding_local_model_of,
     embedding_local_path_of,
@@ -70,6 +70,7 @@ def resolve_embedding_config(user_id: str | None = None) -> dict:
         return {
             "backend": "", "api_base": "", "api_key": "",
             "api_model": "", "local_model": "", "local_path": "",
+            "api_batch_size": DEFAULT_API_EMBED_BATCH_SIZE,
         }
     return {
         "backend": override.backend,
@@ -78,6 +79,7 @@ def resolve_embedding_config(user_id: str | None = None) -> dict:
         "api_model": override.api_model,
         "local_model": override.local_model,
         "local_path": override.local_path,
+        "api_batch_size": override.api_batch_size,
     }
 
 
@@ -96,7 +98,8 @@ def _embedding_cache_sig(c: dict) -> str:
     """Full-config cache key — any field change (incl. api_key/api_base) must
     rebuild the embedding client, even when the model identity is unchanged."""
     return "|".join(
-        (c["backend"], c["api_base"], c["api_key"], c["api_model"], c["local_model"], c["local_path"])
+        (c["backend"], c["api_base"], c["api_key"], c["api_model"],
+         c["local_model"], c["local_path"], str(c["api_batch_size"]))
     )
 
 
@@ -133,38 +136,62 @@ def get_copilot_llm(user_id: str | None = None, streaming: bool = False):
     )
 
 
-def get_llama_llm(user_id: str | None = None):
-    """LlamaIndex LLM (per call — construction is cheap)."""
-    c = resolve_llm_config(user_id)
-    _require_llm(c)
-    return OpenAILike(
-        model=c["model"],
-        api_key=c["api_key"],
-        api_base=c["api_base"],
-        temperature=c["temperature"],
-        is_chat_model=True,
-    )
-
-
 # ── Embedding ──
+
+class _APIEmbedding:
+    """OpenAI-compatible embedding client. Exposes the minimal interface the rest of
+    the codebase relies on (get_text_embedding / get_text_embedding_batch). Batches to
+    `batch_size` to respect per-request limits, which vary by provider."""
+
+    def __init__(self, model: str, api_key: str, api_base: str, batch_size: int):
+        from openai import OpenAI
+
+        self._client = OpenAI(api_key=api_key, base_url=api_base or None)
+        self._model = model
+        self._batch = max(1, batch_size)
+
+    def get_text_embedding(self, text: str) -> list[float]:
+        return self.get_text_embedding_batch([text])[0]
+
+    def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+        out: list[list[float]] = []
+        for i in range(0, len(texts), self._batch):
+            resp = self._client.embeddings.create(model=self._model, input=texts[i:i + self._batch])
+            out.extend(d.embedding for d in resp.data)
+        return out
+
+
+class _LocalEmbedding:
+    """Local sentence-transformers embedding with the same minimal interface."""
+
+    def __init__(self, model_name_or_path: str):
+        from sentence_transformers import SentenceTransformer
+
+        self._model = SentenceTransformer(model_name_or_path)
+
+    def get_text_embedding(self, text: str) -> list[float]:
+        return self._model.encode(text).tolist()
+
+    def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+        return self._model.encode(texts).tolist()
 
 def _build_embedding(c: dict):
     deprecated = ""
     if embedding_mode_of(c["backend"], c["api_base"], c["api_key"]) == "api":
-        from llama_index.embeddings.openai import OpenAIEmbedding
-
         if not c["api_key"]:
             raise ProviderNotConfigured("Embedding")
         model_name = embedding_api_model_of(c["api_model"], deprecated)
         if not model_name:
             raise RuntimeError("EMBEDDING_API_MODEL is required when EMBEDDING_BACKEND=api")
-        kwargs = {"model_name": model_name, "api_key": c["api_key"]}
-        if c["api_base"]:
-            kwargs["api_base"] = c["api_base"]
-        return OpenAIEmbedding(**kwargs)
+        return _APIEmbedding(
+            model=model_name,
+            api_key=c["api_key"],
+            api_base=c["api_base"],
+            batch_size=c["api_batch_size"],
+        )
 
     try:
-        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+        import sentence_transformers  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
             "Local embeddings require optional dependencies. "
@@ -174,10 +201,10 @@ def _build_embedding(c: dict):
 
     model_path = embedding_local_path_of(c["local_path"], c["local_model"], settings.base_dir, deprecated)
     if model_path is not None:
-        return HuggingFaceEmbedding(model_name=str(model_path))
+        return _LocalEmbedding(str(model_path))
     model_name = embedding_local_model_of(c["local_model"], deprecated)
     if model_name:
-        return HuggingFaceEmbedding(model_name=model_name)
+        return _LocalEmbedding(model_name)
     raise RuntimeError(
         "LOCAL_EMBEDDING_MODEL or LOCAL_EMBEDDING_PATH is required when EMBEDDING_BACKEND=local"
     )

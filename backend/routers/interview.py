@@ -424,9 +424,14 @@ def _end_drill_background(session_id, topic, questions, answers, user_id):
             if weak_point and isinstance(score_value, (int, float)):
                 update_weak_point_sr(topic, weak_point, score_value, user_id)
 
+        # 自评 vs 实评的确定性元认知校准(答案里带 confidence 时才会产出 ops)
+        from backend.memory import build_calibration_ops
+        calibration_ops = build_calibration_ops(questions, answers, scores)
+
         asyncio.run(_update_drill_profile(
             topic, overall, scores, len(questions), user_id,
             transcript=_qa_transcript(questions, answers), session_id=session_id,
+            extra_behavior_ops=calibration_ops,
         ))
 
         _task_status[session_id] = {"status": "done", "type": "drill_review"}
@@ -689,7 +694,8 @@ def _qa_transcript(questions: list, answers: list) -> str:
 
 
 async def _update_drill_profile(topic: str, overall: dict, scores: list, total_questions: int, user_id: str,
-                                transcript: str = "", session_id: str | None = None):
+                                transcript: str = "", session_id: str | None = None,
+                                extra_behavior_ops: list | None = None):
     """Update profile from drill evaluation — Mem0-style LLM update."""
     valid = []
     for score in scores:
@@ -710,6 +716,7 @@ async def _update_drill_profile(topic: str, overall: dict, scores: list, total_q
     mastery.pop("level", None)
 
     behavior_ops = await extract_behavior_ops(transcript, user_id, mode="topic_drill", topic=topic)
+    behavior_ops = behavior_ops + (extra_behavior_ops or [])
 
     await llm_update_profile(
         mode="topic_drill",

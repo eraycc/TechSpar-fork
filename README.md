@@ -242,7 +242,7 @@ http://localhost:5173/copilot
 
 | Component | Technology |
 | --- | --- |
-| Backend | FastAPI, LangChain, LangGraph, LlamaIndex |
+| Backend | FastAPI, LangChain, LangGraph |
 | Frontend | React 19, React Router v7, Vite, Tailwind CSS v4 |
 | Storage | SQLite, semantic embeddings |
 | Auth | JWT, bcrypt |
@@ -286,6 +286,16 @@ UI 导入会把归档中的数据全部归到当前登录账户（即使原 `use
 - `--user-id <id>`：仅导出指定用户（多用户部署时使用）
 - `--db-strategy overwrite`：导入时同一 `session_id` 用归档版本覆盖本地（默认保留本地）
 - `--overwrite-files`：导入时覆盖 `data/users/` 已存在的文件（默认保留本地）
+
+---
+
+## 参与贡献
+
+这个项目还在持续打磨，很欢迎你一起把它做得更好。
+
+- **用着别扭、发现 bug、有想法**：直接开个 [Issue](https://github.com/AnnaSuSu/TechSpar/issues) 聊，不用拘谨，把场景说清楚就行。
+- **想动手改**：欢迎直接提 PR——修 bug、补文档、加功能、优化体验都可以。小改动直接发；改动比较大，建议先开个 Issue 对一下方向，免得白做。
+- 接入了新的模型 / 服务商、或者跑通了某个部署方式，也很欢迎回来分享一下，让后面的人少踩坑。
 
 ---
 
